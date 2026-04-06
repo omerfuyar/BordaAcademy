@@ -1,0 +1,1 @@
+[ESP32 DataSheet](https://documentation.espressif.com/esp32_datasheet_en.pdf)

@@ -1,29 +1,37 @@
 #include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/gpio.h"
+#include "lcdDriver.h"
+#include "analogDriver.h"
 #include "esp_log.h"
 
-#define LED_GPIO 2
+#define LCD_STRING_BUFFER_SIZE 16
 
-static const char *TAG = "BLINK_APP";
+const char *LOG_HEADER = "TEST_APP";
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Starting blink program!");
+    ESP_LOGI(LOG_HEADER, "Initializing I2C Master...");
 
-    gpio_reset_pin(LED_GPIO);
-    gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
+    i2cInitMaster();
 
-    int led_state = 0;
+    ESP_LOGI(LOG_HEADER, "Initializing LCD...");
+
+    lcdInitialize();
+    lcdMoveCursor(0, 0);
+    lcdSendString("Sound Level:");
+
+    ESP_LOGI(LOG_HEADER, "Initializing ADC for Sound Sensor...");
+
+    int soundSensorRawVal = 0;
+    char lcdStrBuf[LCD_STRING_BUFFER_SIZE] = {0};
 
     while (1)
     {
-        ESP_LOGI(TAG, "Turning the LED %s!", led_state == 1 ? "ON" : "OFF");
-        gpio_set_level(LED_GPIO, led_state);
+        ESP_ERROR_CHECK(analogReadSoundSensor(&soundSensorRawVal));
 
-        led_state = !led_state;
+        snprintf(lcdStrBuf, sizeof(lcdStrBuf), "Value: %-4d", soundSensorRawVal);
+        lcdMoveCursor(1, 0);
+        lcdSendString(lcdStrBuf);
 
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay();
     }
 }

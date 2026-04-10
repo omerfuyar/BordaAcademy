@@ -5,6 +5,6 @@
 #define SOUND_SENSOR_ADC_UNIT ADC_UNIT_1
 #define SOUND_SENSOR_ADC_CHANNEL ADC_CHANNEL_4
 
-int analogInitSoundSensor();
+int soundSensorInit();
 
-int analogReadSoundSensor(int *retValue);
+int soundSensorRead(int *retValue);

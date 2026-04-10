@@ -3,8 +3,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-// ticks from micro seconds
-#define tfus(n) (n / portTICK_PERIOD_MS)
+// Convert milliseconds to ticks
+#define tfms(n) ((TickType_t)(((n) + (portTICK_PERIOD_MS - 1)) / portTICK_PERIOD_MS))
 
 // requires a int variable 'result', variadic is additional instructions to execute before return
 #define returnIfError(function, ...)     \

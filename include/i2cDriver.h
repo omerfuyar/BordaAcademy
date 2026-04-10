@@ -3,7 +3,7 @@
 #include "hal/i2c_types.h"
 #include "hal/gpio_types.h"
 
-#define I2C_ADDR_BIT_LEN 7
+#define I2C_ADDR_BIT_LEN I2C_ADDR_BIT_LEN_7
 
 // master is preconfigured for this project
 #define I2C_MASTER_NUM I2C_NUM_0
@@ -14,6 +14,6 @@
 
 int i2cInitMaster();
 
-int i2cWriteToSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen, uint32_t ticksToWait, bool mockWrite);
+int i2cWriteToSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen);
 
-int i2cReadFromSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen, uint32_t ticksToWait, bool mockRead);
+int i2cReadFromSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen);

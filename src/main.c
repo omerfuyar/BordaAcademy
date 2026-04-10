@@ -1,15 +1,15 @@
 #include <stdio.h>
 #include "devices/lcdDriver.h"
 #include "devices/soundDriver.h"
+#include "devices/barometerDriver.h"
+#include "devices/humTempDriver.h"
+#include "devices/lightDriver.h"
+#include "dataFilter.h"
 #include "rtosCommon.h"
 #include "esp_log.h"
 #include "esp_err.h"
 
 #define LOG_HEADER "TEST_APP"
-
-#define SENSOR_HUMIDITY_ADDRESS 0x38
-#define SENSOR_BAROMETER_ADDRESS 0x77
-#define SENSOR_LIGHT_ADDRESS 0x23
 
 #define LCD_STRING_BUFFER_SIZE 16
 #define haltIfError(function, ...)                                                                            \
@@ -31,12 +31,29 @@ void app_main(void)
 
     ESP_LOGI(LOG_HEADER, "Initializing LCD...");
     haltIfError(lcdInitialize());
-    haltIfError(lcdMoveCursor(0, 0));
-    haltIfError(lcdSendString("Sound Level:"));
+
+    ESP_LOGI(LOG_HEADER, "Initializing Sensors...");
+    haltIfError(barometerInit());
+    haltIfError(lightInit());
+    haltIfError(humTempInit());
 
     ESP_LOGI(LOG_HEADER, "Initializing ADC for Sound Sensor...");
     haltIfError(soundSensorInit());
 
+    FilterQueueF temperatureData;
+    FilterQueueF humidityData;
+    FilterQueueF pressureData;
+    FilterQueueF lightData;
+
+    FilterQueue_Initialize(temperatureData);
+    FilterQueue_Initialize(humidityData);
+    FilterQueue_Initialize(pressureData);
+    FilterQueue_Initialize(lightData);
+
+    float temperatureFilteredVal = 0.0f;
+    float humidityFilteredVal = 0.0f;
+    float pressureFilteredVal = 0.0f;
+    float lightFilteredVal = 0.0f;
     int soundSensorRawVal = 0;
     char lcdStrBuf[LCD_STRING_BUFFER_SIZE] = {0};
 
@@ -45,7 +62,21 @@ void app_main(void)
     {
         haltIfError(soundSensorRead(&soundSensorRawVal));
 
-        snprintf(lcdStrBuf, sizeof(lcdStrBuf), "Value: %-4d", soundSensorRawVal);
+        humTempRead(&temperatureFilteredVal, &humidityFilteredVal);
+        temperatureFilteredVal = FilterQueueF_Enqueue(&temperatureData, temperatureFilteredVal);
+        humidityFilteredVal = FilterQueueF_Enqueue(&humidityData, humidityFilteredVal);
+
+        lightRead(&lightFilteredVal);
+        lightFilteredVal = FilterQueueF_Enqueue(&lightData, lightFilteredVal);
+
+        barometerRead(&pressureFilteredVal);
+        pressureFilteredVal = FilterQueueF_Enqueue(&pressureData, pressureFilteredVal);
+
+        snprintf(lcdStrBuf, sizeof(lcdStrBuf), "P%.0f T%.1f H%.0f", pressureFilteredVal, temperatureFilteredVal, humidityFilteredVal);
+        haltIfError(lcdMoveCursor(0, 0));
+        haltIfError(lcdSendString(lcdStrBuf));
+
+        snprintf(lcdStrBuf, sizeof(lcdStrBuf), "S:%d L:%.1f", soundSensorRawVal, lightFilteredVal);
         haltIfError(lcdMoveCursor(1, 0));
         haltIfError(lcdSendString(lcdStrBuf));
 

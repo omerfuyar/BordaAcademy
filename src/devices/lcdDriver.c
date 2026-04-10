@@ -9,7 +9,7 @@ static int lcdSendNibble(uint8_t nibble_command)
         data_u | 0x0C,
         data_u | 0x08};
 
-    return i2cWriteToSlave(LCD_I2C_ADDRESS, data_t, 2, portMAX_DELAY, false);
+    return i2cWriteToSlave(LCD_I2C_ADDRESS, data_t, 2);
 }
 
 int lcdInitialize(void)
@@ -54,7 +54,7 @@ int lcdSendCommand(uint8_t cmd)
     };
 
     int result = 0;
-    returnIfError(i2cWriteToSlave(LCD_I2C_ADDRESS, data_t, 4, tfms(2), false));
+    returnIfError(i2cWriteToSlave(LCD_I2C_ADDRESS, data_t, 4));
 
     vTaskDelay(tfms(2));
 
@@ -74,7 +74,7 @@ int lcdSendByte(uint8_t byte)
     };
 
     int result = 0;
-    returnIfError(i2cWriteToSlave(LCD_I2C_ADDRESS, data_t, 4, tfms(2), false));
+    returnIfError(i2cWriteToSlave(LCD_I2C_ADDRESS, data_t, 4));
 
     vTaskDelay(tfms(2));
 

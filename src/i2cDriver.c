@@ -22,17 +22,12 @@ int i2cInitMaster()
     return ESP_OK;
 }
 
-int i2cWriteToSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen, uint32_t ticksToWait, bool mockWrite)
+int i2cWriteToSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen)
 {
-    if (mockWrite)
-    {
-        return ESP_OK;
-    }
-
     if (I2C_DEVICE_HANDLES[deviceAddress] == NULL)
     {
         i2c_device_config_t dev_cfg = {
-            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .dev_addr_length = I2C_ADDR_BIT_LEN,
             .device_address = deviceAddress,
             .scl_speed_hz = I2C_MASTER_FREQ_HZ};
 
@@ -43,18 +38,8 @@ int i2cWriteToSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen, uint32
     return i2c_master_transmit(I2C_DEVICE_HANDLES[deviceAddress], data, dataLen, I2C_MASTER_TIMEOUT_MS);
 }
 
-int i2cReadFromSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen, uint32_t ticksToWait, bool mockRead)
+int i2cReadFromSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen)
 {
-    if (mockRead)
-    {
-        for (size_t i = 0; i < dataLen; i++)
-        {
-            data[i] = rand() % UINT8_MAX;
-        }
-
-        return ESP_OK;
-    }
-
     if (I2C_DEVICE_HANDLES[deviceAddress] == NULL)
     {
         i2c_device_config_t dev_cfg = {

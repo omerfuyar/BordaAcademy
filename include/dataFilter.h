@@ -4,6 +4,13 @@
 
 #define FILTER_QUEUE_CAPACITY 32
 
+#define FilterQueue_Initialize(queue) \
+    do                                \
+    {                                 \
+        queue.front = -1;             \
+        queue.rear = -1;              \
+    } while (0)
+
 typedef struct FilterQueueF
 {
     float data[FILTER_QUEUE_CAPACITY];
@@ -11,12 +18,14 @@ typedef struct FilterQueueF
     int32_t rear;
 } FilterQueueF;
 
-#define FilterQueue_Initialize(queue) \
-    do                                \
-    {                                 \
-        queue.front = -1;             \
-        queue.rear = -1;              \
-    } while (0)
+typedef struct
+{
+    float min;
+    float max;
+    float avg;
+    float median;
+    float stdDev;
+} QueueStats;
 
 bool FilterQueueF_IsFull(const FilterQueueF *queue);
 
@@ -28,3 +37,5 @@ int32_t FilterQueueF_Count(const FilterQueueF *queue);
 float FilterQueueF_Enqueue(FilterQueueF *queue, float data);
 
 float FilterQueueF_Dequeue(FilterQueueF *queue);
+
+QueueStats FilterQueueF_CalculateStats(const FilterQueueF *queue);

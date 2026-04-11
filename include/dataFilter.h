@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define FILTER_QUEUE_CAPACITY 16
+#define FILTER_QUEUE_CAPACITY 32
 
 typedef struct FilterQueueF
 {

@@ -10,8 +10,23 @@
 #include "esp_err.h"
 
 #define LOG_HEADER "TEST_APP"
-
 #define LCD_STRING_BUFFER_SIZE 16
+
+#define SENSOR_DATA_QUEUE_LENGTH 16
+#define PRODUCER_TASK_DELAY_MS 1000
+#define CONSUMER_TASK_DELAY_MS 30000
+
+typedef struct
+{
+    float temp;
+    float hum;
+    float pres;
+    float light;
+    int sound;
+} SensorData_t;
+
+QueueHandle_t sensorDataQueue;
+
 #define haltIfError(function, ...)                                                                            \
     do                                                                                                        \
     {                                                                                                         \
@@ -23,6 +38,62 @@
             return;                                                                                           \
         }                                                                                                     \
     } while (0)
+
+void producer_task(void *pvParameters)
+{
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    while (1)
+    {
+        SensorData_t newData;
+        haltIfError(soundSensorRead(&newData.sound));
+        humTempRead(&newData.temp, &newData.hum);
+        lightRead(&newData.light);
+        barometerRead(&newData.pres);
+
+        // Wait instantly (0 timeout). If fails, buffer is full (consumer is slow).
+        if (xQueueSend(sensorDataQueue, &newData, 0) != pdTRUE)
+        {
+            ESP_LOGW(LOG_HEADER, "Consumer is too slow, Queue is full. Dropping latest measurement.");
+        }
+
+        xTaskDelayUntil(&xLastWakeTime, tfms(PRODUCER_TASK_DELAY_MS));
+    }
+}
+
+void consumer_task(void *pvParameters)
+{
+    FilterQueueF temperatureData;
+    FilterQueueF humidityData;
+    FilterQueueF pressureData;
+    FilterQueueF lightData;
+
+    FilterQueue_Initialize(temperatureData);
+    FilterQueue_Initialize(humidityData);
+    FilterQueue_Initialize(pressureData);
+    FilterQueue_Initialize(lightData);
+
+    char lcdStrBuf[LCD_STRING_BUFFER_SIZE] = {0};
+
+    while (1)
+    {
+        SensorData_t popData;
+        xQueueReceive(sensorDataQueue, &popData, portMAX_DELAY); // infinite wait for data
+
+        popData.temp = FilterQueueF_Enqueue(&temperatureData, popData.temp);
+        popData.hum = FilterQueueF_Enqueue(&humidityData, popData.hum);
+        popData.pres = FilterQueueF_Enqueue(&pressureData, popData.pres);
+        popData.light = FilterQueueF_Enqueue(&lightData, popData.light);
+
+        snprintf(lcdStrBuf, sizeof(lcdStrBuf), "P%.0f T%.1f H%.0f", popData.pres, popData.temp, popData.hum);
+        haltIfError(lcdMoveCursor(0, 0));
+        haltIfError(lcdSendString(lcdStrBuf));
+
+        snprintf(lcdStrBuf, sizeof(lcdStrBuf), "S:%d L:%.1f", popData.sound, popData.light);
+        haltIfError(lcdMoveCursor(1, 0));
+        haltIfError(lcdSendString(lcdStrBuf));
+    }
+}
 
 void app_main(void)
 {
@@ -40,49 +111,12 @@ void app_main(void)
     ESP_LOGI(LOG_HEADER, "Initializing ADC for Sound Sensor...");
     haltIfError(soundSensorInit());
 
-    FilterQueueF temperatureData;
-    FilterQueueF humidityData;
-    FilterQueueF pressureData;
-    FilterQueueF lightData;
+    ESP_LOGI(LOG_HEADER, "Initializing RTOS Primitives...");
+    sensorDataQueue = xQueueCreate(SENSOR_DATA_QUEUE_LENGTH, sizeof(SensorData_t));
 
-    FilterQueue_Initialize(temperatureData);
-    FilterQueue_Initialize(humidityData);
-    FilterQueue_Initialize(pressureData);
-    FilterQueue_Initialize(lightData);
+    ESP_LOGI(LOG_HEADER, "Launching Tasks...");
+    xTaskCreate(producer_task, "Producer", 4096, NULL, 2, NULL); // high priority for producer
+    xTaskCreate(consumer_task, "Consumer", 4096, NULL, 1, NULL);
 
-    float temperatureFilteredVal = 0.0f;
-    float humidityFilteredVal = 0.0f;
-    float pressureFilteredVal = 0.0f;
-    float lightFilteredVal = 0.0f;
-    int soundSensorRawVal = 0;
-    char lcdStrBuf[LCD_STRING_BUFFER_SIZE] = {0};
-
-    ESP_LOGI(LOG_HEADER, "Starting main loop...");
-    while (1)
-    {
-        haltIfError(soundSensorRead(&soundSensorRawVal));
-
-        humTempRead(&temperatureFilteredVal, &humidityFilteredVal);
-        // ESP_LOGI(LOG_HEADER, "Temperature: %f, Humidity: %f, Sound: %d", temperatureFilteredVal, humidityFilteredVal, soundSensorRawVal);
-        temperatureFilteredVal = FilterQueueF_Enqueue(&temperatureData, temperatureFilteredVal);
-        humidityFilteredVal = FilterQueueF_Enqueue(&humidityData, humidityFilteredVal);
-
-        lightRead(&lightFilteredVal);
-        // ESP_LOGI(LOG_HEADER, "Light: %f", lightFilteredVal);
-        lightFilteredVal = FilterQueueF_Enqueue(&lightData, lightFilteredVal);
-
-        barometerRead(&pressureFilteredVal);
-        // ESP_LOGI(LOG_HEADER, "Pressure: %f", pressureFilteredVal);
-        pressureFilteredVal = FilterQueueF_Enqueue(&pressureData, pressureFilteredVal);
-
-        snprintf(lcdStrBuf, sizeof(lcdStrBuf), "P%.0f T%.1f H%.0f", pressureFilteredVal, temperatureFilteredVal, humidityFilteredVal);
-        haltIfError(lcdMoveCursor(0, 0));
-        haltIfError(lcdSendString(lcdStrBuf));
-
-        snprintf(lcdStrBuf, sizeof(lcdStrBuf), "S:%d L:%.1f", soundSensorRawVal, lightFilteredVal);
-        haltIfError(lcdMoveCursor(1, 0));
-        haltIfError(lcdSendString(lcdStrBuf));
-
-        vTaskDelay(tfms(1));
-    }
+    // app_main exit
 }

@@ -63,13 +63,16 @@ void app_main(void)
         haltIfError(soundSensorRead(&soundSensorRawVal));
 
         humTempRead(&temperatureFilteredVal, &humidityFilteredVal);
+        // ESP_LOGI(LOG_HEADER, "Temperature: %f, Humidity: %f, Sound: %d", temperatureFilteredVal, humidityFilteredVal, soundSensorRawVal);
         temperatureFilteredVal = FilterQueueF_Enqueue(&temperatureData, temperatureFilteredVal);
         humidityFilteredVal = FilterQueueF_Enqueue(&humidityData, humidityFilteredVal);
 
         lightRead(&lightFilteredVal);
+        // ESP_LOGI(LOG_HEADER, "Light: %f", lightFilteredVal);
         lightFilteredVal = FilterQueueF_Enqueue(&lightData, lightFilteredVal);
 
         barometerRead(&pressureFilteredVal);
+        // ESP_LOGI(LOG_HEADER, "Pressure: %f", pressureFilteredVal);
         pressureFilteredVal = FilterQueueF_Enqueue(&pressureData, pressureFilteredVal);
 
         snprintf(lcdStrBuf, sizeof(lcdStrBuf), "P%.0f T%.1f H%.0f", pressureFilteredVal, temperatureFilteredVal, humidityFilteredVal);

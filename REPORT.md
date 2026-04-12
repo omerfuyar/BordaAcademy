@@ -1,6 +1,7 @@
 # Borda Academy Qualification Exam Report
 
 **Author:** Omer Faruk Uyar
+**GitHub Repo:** https://github.com/omerfuyar/BordaAcademy
 
 ## Tools
 

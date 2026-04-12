@@ -23,10 +23,6 @@ int bleInitialize(void)
 
     returnIfError(esp_bluedroid_enable());
 
-    returnIfError(esp_ble_gap_register_callback(esp_gap_cb));
-
-    ESP_LOGI(TAG, "BLE Driver Initialized");
-
     return ESP_OK;
 }
 

@@ -10,14 +10,14 @@
 #include "esp_log.h"
 #include "esp_err.h"
 
-#define LOG_HEADER "TEST_APP"
+#define LOG_HEADER "APP"
 #define LCD_STRING_BUFFER_SIZE 16
 
-#define SENSOR_DATA_QUEUE_LENGTH 16
+#define SHARED_DATA_QUEUE_LENGTH 16
 #define PRODUCER_TASK_DELAY_MS 1000
 #define CONSUMER_TASK_BLE_ADVERT_INTERVAL 30
 
-#define haltIfError(function, ...)                                                                            \
+#define panicIfError(function, ...)                                                                           \
     do                                                                                                        \
     {                                                                                                         \
         int _err = (function);                                                                                \
@@ -29,7 +29,7 @@
         }                                                                                                     \
     } while (0)
 
-typedef struct
+typedef struct DataPack
 {
     float temperature;
     float humidity;
@@ -38,27 +38,30 @@ typedef struct
     int sound;
 } DataPack;
 
-QueueHandle_t sensorDataQueue;
+QueueHandle_t sharedDataQueue;
 
 void taskProducer(void *pvParameters)
 {
-    TickType_t xLastWakeTime = xTaskGetTickCount();
+    TickType_t taskLastWakeTime = xTaskGetTickCount();
 
     while (1)
     {
         DataPack newData;
-        haltIfError(soundRead(&newData.sound));
-        haltIfError(humTempRead(&newData.temperature, &newData.humidity));
-        haltIfError(lightRead(&newData.light));
-        haltIfError(barometerRead(&newData.pressure));
+        panicIfError(soundRead(&newData.sound));
+        panicIfError(humTempRead(&newData.temperature, &newData.humidity));
+        panicIfError(lightRead(&newData.light));
+        panicIfError(barometerRead(&newData.pressure));
 
-        // SENSOR_DATA_QUEUE_LENGTH
-        if (xQueueSend(sensorDataQueue, &newData, 0) != pdTRUE)
+        // SHARED_DATA_QUEUE_LENGTH
+        if (xQueueSend(sharedDataQueue, &newData, 0) != pdTRUE)
         {
-            ESP_LOGW(LOG_HEADER, "Consumer is too slow, Queue is full. Dropping latest measurement.");
+            ESP_LOGW(LOG_HEADER, "Consumer is too slow, Queue is full. Dropping the oldest measurement.");
+            DataPack droppedData;
+            xQueueReceive(sharedDataQueue, &droppedData, 0);
+            xQueueSend(sharedDataQueue, &newData, 0);
         }
 
-        xTaskDelayUntil(&xLastWakeTime, tfms(PRODUCER_TASK_DELAY_MS));
+        xTaskDelayUntil(&taskLastWakeTime, tfms(PRODUCER_TASK_DELAY_MS));
     }
 }
 
@@ -94,7 +97,7 @@ void taskConsumer(void *pvParameters)
     while (1)
     {
         DataPack receivedSensorData;
-        xQueueReceive(sensorDataQueue, &receivedSensorData, portMAX_DELAY); // infinite wait for data
+        xQueueReceive(sharedDataQueue, &receivedSensorData, portMAX_DELAY); // infinite wait for data
 
         // take the median of last raw data and put it in the filtered queue
         FilterQueueF_Enqueue(&filteredTemperatureData, FilterQueueF_Enqueue(&rawTemperatureData, receivedSensorData.temperature));
@@ -104,12 +107,12 @@ void taskConsumer(void *pvParameters)
         FilterQueueF_Enqueue(&filteredSoundData, FilterQueueF_Enqueue(&rawSoundData, (float)receivedSensorData.sound));
 
         snprintf(lcdStrBuf, sizeof(lcdStrBuf), "P%.0f T%.1f H%.0f", receivedSensorData.pressure, receivedSensorData.temperature, receivedSensorData.humidity);
-        haltIfError(lcdMoveCursor(0, 0));
-        haltIfError(lcdSendString(lcdStrBuf));
+        panicIfError(lcdMoveCursor(0, 0));
+        panicIfError(lcdSendString(lcdStrBuf));
 
         snprintf(lcdStrBuf, sizeof(lcdStrBuf), "S:%d L:%.1f", receivedSensorData.sound, receivedSensorData.light);
-        haltIfError(lcdMoveCursor(1, 0));
-        haltIfError(lcdSendString(lcdStrBuf));
+        panicIfError(lcdMoveCursor(1, 0));
+        panicIfError(lcdSendString(lcdStrBuf));
 
         bleCounter++;
         if (bleCounter >= CONSUMER_TASK_BLE_ADVERT_INTERVAL)
@@ -135,8 +138,8 @@ void taskConsumer(void *pvParameters)
             } blePayload;
 
             blePayload.len = sizeof(blePayload) - 1;
-            blePayload.type = 0xEA;
-            blePayload.company_id = 0xDEAD;
+            blePayload.type = 0xFF;
+            blePayload.company_id = 0xFFFF;
 
             blePayload.minTmp = (int8_t)temperatureStat.min;
             blePayload.maxTmp = (int8_t)temperatureStat.max;
@@ -164,33 +167,27 @@ void taskConsumer(void *pvParameters)
             blePayload.medSnd = (uint8_t)(soundStat.median > 255 ? 255 : soundStat.median);
             blePayload.stdSnd = (uint8_t)(soundStat.stdDev);
 
-            haltIfError(bleAdvertise((uint8_t *)&blePayload, sizeof(blePayload)));
-            ESP_LOGI(LOG_HEADER, "BLE Advertising sent.");
+            panicIfError(bleAdvertise((uint8_t *)&blePayload, sizeof(blePayload)));
         }
     }
 }
 
 void app_main(void)
 {
-    ESP_LOGI(LOG_HEADER, "Initializing I2C Master...");
-    haltIfError(i2cMasterInitialize());
+    ESP_LOGI(LOG_HEADER, "Initializing Peripherals");
+    panicIfError(i2cMasterInitialize());
 
-    ESP_LOGI(LOG_HEADER, "Initializing LCD...");
-    haltIfError(lcdInitialize());
+    panicIfError(lcdInitialize());
 
-    ESP_LOGI(LOG_HEADER, "Initializing Sensors...");
-    haltIfError(barometerInitialize());
-    haltIfError(lightInitialize());
-    haltIfError(humTempInitialize());
+    panicIfError(barometerInitialize());
+    panicIfError(lightInitialize());
+    panicIfError(humTempInitialize());
 
-    ESP_LOGI(LOG_HEADER, "Initializing ADC for Sound Sensor...");
-    haltIfError(soundInitialize());
+    panicIfError(soundInitialize());
 
-    ESP_LOGI(LOG_HEADER, "Initializing BLE...");
-    haltIfError(bleInitialize());
+    panicIfError(bleInitialize());
 
-    ESP_LOGI(LOG_HEADER, "Initializing RTOS Primitives...");
-    sensorDataQueue = xQueueCreate(SENSOR_DATA_QUEUE_LENGTH, sizeof(DataPack));
+    sharedDataQueue = xQueueCreate(SHARED_DATA_QUEUE_LENGTH, sizeof(DataPack));
 
     ESP_LOGI(LOG_HEADER, "Launching Tasks...");
     xTaskCreate(taskProducer, "Producer", 4096, NULL, 2, NULL); // high priority for producer

@@ -18,7 +18,7 @@ typedef struct FilterQueueF
     int32_t rear;
 } FilterQueueF;
 
-typedef struct
+typedef struct QueueStats
 {
     float min;
     float max;

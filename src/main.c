@@ -4,6 +4,7 @@
 #include "devices/barometerDriver.h"
 #include "devices/humTempDriver.h"
 #include "devices/lightDriver.h"
+#include "bleDriver.h"
 #include "dataFilter.h"
 #include "rtosCommon.h"
 #include "esp_log.h"
@@ -39,14 +40,14 @@ typedef struct
 
 QueueHandle_t sensorDataQueue;
 
-void producer_task(void *pvParameters)
+void taskProducer(void *pvParameters)
 {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     while (1)
     {
         DataPack newData;
-        haltIfError(soundSensorRead(&newData.sound));
+        haltIfError(soundRead(&newData.sound));
         haltIfError(humTempRead(&newData.temperature, &newData.humidity));
         haltIfError(lightRead(&newData.light));
         haltIfError(barometerRead(&newData.pressure));
@@ -61,7 +62,7 @@ void producer_task(void *pvParameters)
     }
 }
 
-void consumer_task(void *pvParameters)
+void taskConsumer(void *pvParameters)
 {
     FilterQueueF rawTemperatureData;
     FilterQueueF rawHumidityData;
@@ -121,18 +122,50 @@ void consumer_task(void *pvParameters)
             QueueStats lightStat = FilterQueueF_CalculateStats(&filteredLightData);
             QueueStats soundStat = FilterQueueF_CalculateStats(&filteredSoundData);
 
-            ESP_LOGW(LOG_HEADER, "--- 30s BLE PAYLOAD GENERATED ---");
-            ESP_LOGW(LOG_HEADER, "Temp Stats | Min: %5.1f | Max: %5.1f | Median: %5.1f | StdDev: %5.2f",
-                     temperatureStat.min, temperatureStat.max, temperatureStat.median, temperatureStat.stdDev);
-            ESP_LOGW(LOG_HEADER, "Hum  Stats | Min: %5.1f | Max: %5.1f | Median: %5.1f | StdDev: %5.2f",
-                     humidityStat.min, humidityStat.max, humidityStat.median, humidityStat.stdDev);
-            ESP_LOGW(LOG_HEADER, "Press Stats | Min: %5.1f | Max: %5.1f | Median: %5.1f | StdDev: %5.2f",
-                     pressureStat.min, pressureStat.max, pressureStat.median, pressureStat.stdDev);
-            ESP_LOGW(LOG_HEADER, "Light Stats | Min: %5.1f | Max: %5.1f | Median: %5.1f | StdDev: %5.2f",
-                     lightStat.min, lightStat.max, lightStat.median, lightStat.stdDev);
-            ESP_LOGW(LOG_HEADER, "Sound Stats | Min: %5.1f | Max: %5.1f | Median: %5.1f | StdDev: %5.2f",
-                     soundStat.min, soundStat.max, soundStat.median, soundStat.stdDev);
-            ESP_LOGW(LOG_HEADER, "-----------------------------------");
+            struct __attribute__((packed))
+            {
+                uint8_t len;
+                uint8_t type;
+                uint16_t company_id;
+                int8_t minTmp, maxTmp, medTmp, stdTmp;
+                uint8_t minHum, maxHum, medHum, stdHum;
+                uint8_t minPrs, maxPrs, medPrs, stdPrs;
+                uint8_t minLig, maxLig, medLig, stdLig;
+                uint8_t minSnd, maxSnd, medSnd, stdSnd;
+            } blePayload;
+
+            blePayload.len = sizeof(blePayload) - 1;
+            blePayload.type = 0xEA;
+            blePayload.company_id = 0xDEAD;
+
+            blePayload.minTmp = (int8_t)temperatureStat.min;
+            blePayload.maxTmp = (int8_t)temperatureStat.max;
+            blePayload.medTmp = (int8_t)temperatureStat.median;
+            blePayload.stdTmp = (int8_t)temperatureStat.stdDev;
+
+            blePayload.minHum = (uint8_t)humidityStat.min;
+            blePayload.maxHum = (uint8_t)humidityStat.max;
+            blePayload.medHum = (uint8_t)humidityStat.median;
+            blePayload.stdHum = (uint8_t)humidityStat.stdDev;
+
+            // ~1000 so scaling (pressure - 900)
+            blePayload.minPrs = (uint8_t)(pressureStat.min - 900);
+            blePayload.maxPrs = (uint8_t)(pressureStat.max - 900);
+            blePayload.medPrs = (uint8_t)(pressureStat.median - 900);
+            blePayload.stdPrs = (uint8_t)pressureStat.stdDev;
+
+            blePayload.minLig = (uint8_t)(lightStat.min > 255 ? 255 : lightStat.min);
+            blePayload.maxLig = (uint8_t)(lightStat.max > 255 ? 255 : lightStat.max);
+            blePayload.medLig = (uint8_t)(lightStat.median > 255 ? 255 : lightStat.median);
+            blePayload.stdLig = (uint8_t)(lightStat.stdDev);
+
+            blePayload.minSnd = (uint8_t)(soundStat.min > 255 ? 255 : soundStat.min);
+            blePayload.maxSnd = (uint8_t)(soundStat.max > 255 ? 255 : soundStat.max);
+            blePayload.medSnd = (uint8_t)(soundStat.median > 255 ? 255 : soundStat.median);
+            blePayload.stdSnd = (uint8_t)(soundStat.stdDev);
+
+            haltIfError(bleAdvertise((uint8_t *)&blePayload, sizeof(blePayload)));
+            ESP_LOGI(LOG_HEADER, "BLE Advertising sent.");
         }
     }
 }
@@ -140,25 +173,28 @@ void consumer_task(void *pvParameters)
 void app_main(void)
 {
     ESP_LOGI(LOG_HEADER, "Initializing I2C Master...");
-    haltIfError(i2cInitMaster());
+    haltIfError(i2cMasterInitialize());
 
     ESP_LOGI(LOG_HEADER, "Initializing LCD...");
     haltIfError(lcdInitialize());
 
     ESP_LOGI(LOG_HEADER, "Initializing Sensors...");
-    haltIfError(barometerInit());
-    haltIfError(lightInit());
-    haltIfError(humTempInit());
+    haltIfError(barometerInitialize());
+    haltIfError(lightInitialize());
+    haltIfError(humTempInitialize());
 
     ESP_LOGI(LOG_HEADER, "Initializing ADC for Sound Sensor...");
-    haltIfError(soundSensorInit());
+    haltIfError(soundInitialize());
+
+    ESP_LOGI(LOG_HEADER, "Initializing BLE...");
+    haltIfError(bleInitialize());
 
     ESP_LOGI(LOG_HEADER, "Initializing RTOS Primitives...");
     sensorDataQueue = xQueueCreate(SENSOR_DATA_QUEUE_LENGTH, sizeof(DataPack));
 
     ESP_LOGI(LOG_HEADER, "Launching Tasks...");
-    xTaskCreate(producer_task, "Producer", 4096, NULL, 2, NULL); // high priority for producer
-    xTaskCreate(consumer_task, "Consumer", 4096, NULL, 1, NULL);
+    xTaskCreate(taskProducer, "Producer", 4096, NULL, 2, NULL); // high priority for producer
+    xTaskCreate(taskConsumer, "Consumer", 4096, NULL, 1, NULL);
 
     // app_main exit
 }

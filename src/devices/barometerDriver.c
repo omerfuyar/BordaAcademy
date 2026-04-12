@@ -2,7 +2,7 @@
 #include "i2cDriver.h"
 #include "rtosCommon.h"
 
-int barometerInit(void)
+int barometerInitialize(void)
 {
     vTaskDelay(tfms(100));
     return ESP_OK;

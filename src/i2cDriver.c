@@ -5,7 +5,7 @@
 static i2c_master_bus_handle_t I2C_BUS_HANDLE = NULL;
 static i2c_master_dev_handle_t I2C_DEVICE_HANDLES[128] = {0};
 
-int i2cInitMaster()
+int i2cMasterInitialize(void)
 {
     i2c_master_bus_config_t i2c_mst_config = {
         .clk_source = I2C_CLK_SRC_DEFAULT,

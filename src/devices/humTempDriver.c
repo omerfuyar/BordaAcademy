@@ -2,7 +2,7 @@
 #include "i2cDriver.h"
 #include "rtosCommon.h"
 
-int humTempInit(void)
+int humTempInitialize(void)
 {
     vTaskDelay(tfms(100));
     return ESP_OK;

@@ -12,7 +12,7 @@
 #define I2C_MASTER_FREQ_HZ 100000
 #define I2C_MASTER_TIMEOUT_MS 1000
 
-int i2cInitMaster();
+int i2cMasterInitialize(void);
 
 int i2cWriteToSlave(uint8_t deviceAddress, uint8_t *data, size_t dataLen);
 

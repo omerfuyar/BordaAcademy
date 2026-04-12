@@ -4,7 +4,7 @@
 
 adc_oneshot_unit_handle_t SOUND_SENSOR_HANDLE = NULL;
 
-int soundSensorInit()
+int soundInitialize(void)
 {
     adc_oneshot_unit_init_cfg_t adcUnitInitConfig = {
         .unit_id = SOUND_SENSOR_ADC_UNIT,
@@ -21,7 +21,7 @@ int soundSensorInit()
     return adc_oneshot_config_channel(SOUND_SENSOR_HANDLE, SOUND_SENSOR_ADC_CHANNEL, &adcChannelInitConfig);
 }
 
-int soundSensorRead(int *retValue)
+int soundRead(int *retValue)
 {
     int result = 0;
     returnIfError(adc_oneshot_read(SOUND_SENSOR_HANDLE, SOUND_SENSOR_ADC_CHANNEL, retValue));

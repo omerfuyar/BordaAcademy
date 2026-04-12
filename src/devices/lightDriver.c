@@ -2,7 +2,7 @@
 #include "i2cDriver.h"
 #include "rtosCommon.h"
 
-int lightInit()
+int lightInitialize()
 {
     vTaskDelay(tfms(100));
     return ESP_OK;
